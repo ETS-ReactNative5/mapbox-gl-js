@@ -79,6 +79,7 @@ type IControl = {
     onRemove(map: Map): void;
 
     +getDefaultPosition?: () => ControlPosition;
+    +_setLanguage?: (language: string) => void;
 }
 /* eslint-enable no-use-before-define */
 
@@ -789,12 +790,17 @@ class Map extends Camera {
      * Returns the map's geographical bounds. When the bearing or pitch is non-zero, the visible region is not
      * an axis-aligned rectangle, and the result is the smallest bounds that encompasses the visible region.
      * If a padding is set on the map, the bounds returned are for the inset.
+     * This function isn't supported with globe projection.
      *
      * @returns {LngLatBounds} The geographical bounds of the map as {@link LngLatBounds}.
      * @example
      * const bounds = map.getBounds();
      */
-    getBounds(): LngLatBounds {
+    getBounds(): LngLatBounds | null {
+        if (this.transform.projection.name === 'globe') {
+            warnOnce('Globe projection does not support getBounds API');
+            return null;
+        }
         return this.transform.getBounds();
     }
 
@@ -1070,11 +1076,18 @@ class Map extends Camera {
         if (this.style) {
             for (const id in this.style._sourceCaches) {
                 const source = this.style._sourceCaches[id]._source;
-                if (source.language && source.language !== language && source._setLanguage) {
-                    source._setLanguage(language);
+                if (source.language && source.language !== this._language && source._setLanguage) {
+                    source._setLanguage(this._language);
                 }
             }
         }
+
+        for (const control of this._controls) {
+            if (control._setLanguage) {
+                control._setLanguage(this._language);
+            }
+        }
+
         return this;
     }
 
@@ -1134,11 +1147,11 @@ class Map extends Camera {
      * @private
      * @returns {boolean} Returns `globe-is-active` boolean.
      * @example
-     * if (map._usingGlobe()) {
+     * if (map._showingGlobe()) {
      *     // do globe things here
      * }
      */
-    _usingGlobe(): boolean { return this.transform.projection.name === 'globe'; }
+    _showingGlobe(): boolean { return this.transform.projection.name === 'globe'; }
 
     /**
      * Sets the map's projection. If called with `null` or `undefined`, the map will reset to Mercator.

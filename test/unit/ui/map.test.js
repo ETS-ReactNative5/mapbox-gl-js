@@ -1136,6 +1136,17 @@ test('Map', (t) => {
             t.end();
         });
 
+        t.test('no-op with globe', (t) => {
+            t.stub(console, 'warn');
+            const map = createMap(t, {zoom: 0, skipCSSStub: true});
+            map.setProjection('globe');
+            const bounds = map.getBounds();
+
+            t.equal(bounds, null);
+            t.ok(console.warn.calledOnce);
+            t.end();
+        });
+
         t.test('padded bounds', (t) => {
             const map = createMap(t, {zoom: 1, bearing: 45, skipCSSStub: true});
 
@@ -1629,6 +1640,7 @@ test('Map', (t) => {
             options = {name: 'lambertConformalConic', center: [20, 25], parallels: [30, -30]};
             map.setProjection(options);
             t.deepEqual(map.getProjection(), options);
+            t.notOk(map._showingGlobe());
             t.end();
         });
 
@@ -1642,6 +1654,7 @@ test('Map', (t) => {
                     parallels: [29.5, 45.5]
                 });
                 t.deepEqual(map.getProjection(), map.transform.getProjection());
+                t.notOk(map._showingGlobe());
                 t.end();
             });
         });
@@ -1654,6 +1667,7 @@ test('Map', (t) => {
                     center: [0, 0],
                 });
                 t.deepEqual(map.getProjection(), map.transform.getProjection());
+                t.ok(map._showingGlobe());
                 t.end();
             });
 
@@ -1671,6 +1685,7 @@ test('Map', (t) => {
                     name: 'mercator',
                     center: [0, 0],
                 });
+                t.notOk(map._showingGlobe());
                 t.end();
             });
         });
@@ -1682,21 +1697,28 @@ test('Map', (t) => {
                 t.equal(map.painter.clearBackgroundTiles.callCount, 0);
                 t.deepEqual(map.getProjection().name, 'globe');
                 t.deepEqual(map.transform.getProjection().name, `globe`);
+                t.ok(map._showingGlobe());
+
                 map.setZoom(12);
                 map.once('render', () => {
                     t.equal(map.painter.clearBackgroundTiles.callCount, 0);
                     t.deepEqual(map.getProjection().name, 'globe');
                     t.deepEqual(map.transform.getProjection().name, `mercator`);
+                    t.notOk(map._showingGlobe());
+
                     map.setProjection({name: 'mercator'});
                     t.equal(map.painter.clearBackgroundTiles.callCount, 0);
                     t.deepEqual(map.getProjection().name, 'mercator');
                     t.deepEqual(map.transform.getProjection().name, `mercator`);
+                    t.notOk(map._showingGlobe());
+
                     map.setZoom(3);
                     map.once('render', () => {
                         map.setProjection({name: 'globe'});
                         t.equal(map.painter.clearBackgroundTiles.callCount, 1);
                         t.deepEqual(map.getProjection().name, 'globe');
                         t.deepEqual(map.transform.getProjection().name, `globe`);
+                        t.ok(map._showingGlobe());
                         t.end();
                     });
                 });
@@ -2289,11 +2311,12 @@ test('Map', (t) => {
                 t.error(err);
                 t.spy(map.style, 'queryRenderedFeatures');
 
-                const output = map.queryRenderedFeatures({filter: ['all']});
+                const output = map.queryRenderedFeatures(map.project(new LngLat(0, 0)), {filter: ['all']});
 
                 const args = map.style.queryRenderedFeatures.getCall(0).args;
-                t.ok(args[0]);
+                t.deepEqual(args[0], {x: 100, y: 100});
                 t.deepEqual(args[1], {availableImages: [], filter: ['all']});
+                t.deepEqual(args[2], map.transform);
                 t.deepEqual(output, []);
 
                 t.end();
